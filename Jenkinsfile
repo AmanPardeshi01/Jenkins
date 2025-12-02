@@ -21,23 +21,23 @@ pipeline {
             }
         }
 
-        // ✅ Replace your old Docker Run stage with this
         stage('Docker Run') {
             steps {
-                // 🔹 Removes old container if it exists
-                bat 'docker rm -f myapp-container || echo "No previous container"'
+                script {
+                    // Stop old container if running
+                    bat 'docker stop myapp-container || echo "No running container"'
 
-                // 🔹 Runs new container
-                bat 'docker run -d -p 9090:8080 --name myapp-container myapp:latest'
+                    // Remove old container
+                    bat 'docker rm myapp-container || echo "No container to remove"'
+
+                    // Start new container
+                    bat 'docker run -d -p 9090:8080 --name myapp-container myapp:latest'
+                }
             }
         }
-
     }
 
     post {
-        always {
-            cleanWs()
-        }
         success {
             echo "Build Successful!"
         }
