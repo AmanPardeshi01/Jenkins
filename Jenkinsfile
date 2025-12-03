@@ -1,48 +1,65 @@
 pipeline {
-    agent any
+  agent any
 
-    stages {
+  environment {
+    DOCKERHUB_CREDENTIALS = 'dockerhub-creds'   // Jenkins credential ID (username/password or token)
+    DOCKERHUB_REPO = 'YOUR_DOCKERHUB_USER/spring-sample' // change this
+    IMAGE_TAG = "${env.BUILD_NUMBER}"
+  }
 
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Build (Maven)') {
-            steps {
-                bat 'mvnw.cmd clean package'
-            }
-        }
-
-        stage('Docker Build') {
-            steps {
-                bat 'docker build -t myapp:latest .'
-            }
-        }
-
-        stage('Docker Run') {
-            steps {
-                script {
-                    // Stop old container if running
-                    bat 'docker stop myapp-container || echo "No running container"'
-
-                    // Remove old container
-                    bat 'docker rm myapp-container || echo "No container to remove"'
-
-                    // Start new container
-                    bat 'docker run -d -p 9090:8080 --name myapp-container myapp:latest'
-                }
-            }
-        }
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
     }
 
-    post {
-        success {
-            echo "Build Successful!"
-        }
-        failure {
-            echo "Build Failed."
-        }
+    stage('Build & Test') {
+      steps {
+        sh 'mvn -B clean package'
+      }
     }
+
+    stage('Build Docker Image') {
+      steps {
+        script {
+          docker.build("${env.DOCKERHUB_REPO}:${env.IMAGE_TAG}")
+        }
+      }
+    }
+
+    stage('Push to Docker Hub') {
+      steps {
+        script {
+          docker.withRegistry('https://index.docker.io/v1/', env.DOCKERHUB_CREDENTIALS) {
+            docker.image("${env.DOCKERHUB_REPO}:${env.IMAGE_TAG}").push()
+            // also tag 'latest' optionally
+            docker.image("${env.DOCKERHUB_REPO}:${env.IMAGE_TAG}").push('latest')
+          }
+        }
+      }
+    }
+
+    stage('Deploy (Restart Container)') {
+      steps {
+        // This example deploys on the Jenkins host by stopping previous container and running a new one.
+        // Adjust for remote host or Kubernetes as needed.
+        sh """
+          docker rm -f spring-sample || true
+          docker pull ${env.DOCKERHUB_REPO}:${env.IMAGE_TAG}
+          docker run -d --name spring-sample -p 8080:8080 ${env.DOCKERHUB_REPO}:${env.IMAGE_TAG}
+        """
+      }
+    }
+  }
+
+  post {
+    always {
+      junit '**/target/surefire-reports/*.xml'  // if you run tests producing reports
+      archiveArtifacts artifacts: 'target/*.jar', allowEmptyArchive: true
+    }
+    failure {
+      echo "Build failed!"
+    }
+  }
 }
