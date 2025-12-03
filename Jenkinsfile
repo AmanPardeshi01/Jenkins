@@ -3,7 +3,7 @@ pipeline {
 
   environment {
     DOCKERHUB_CREDENTIALS = 'dockerhub-creds'   // Jenkins credential ID for Docker Hub (username/password)
-    DOCKERHUB_REPO = 'YOUR_DOCKERHUB_USER/spring-sample' // change this
+    DOCKERHUB_REPO = 'amanpardeshi01/jenkins' // change this
     IMAGE_TAG = "${env.BUILD_NUMBER}"
     MAVEN_ARGS = '-B -DskipTests' // change to '' if you want tests run in CI
   }
